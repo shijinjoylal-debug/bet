@@ -30,17 +30,6 @@ An interactive 3D horse racing simulator built with **Three.js**, featuring anim
    - `ACCELERATING`, `GALLOP`, and `FINAL_SPRINT`: Race-state logic drives position and speed while the GLB running clip plays.
    - `COOLING_DOWN`: The running clip pauses when a horse finishes.
 
-5. **Predetermined Winner & Dynamic Pack Positional Shifts**:
-   - Set the secret predetermined winner at line 19 of `main.js`:
-     ```javascript
-     export const PREDETERMINED_WINNER = 5; // e.g. #5 Thunder Bay
-     ```
-   - **Guaranteed Winner**: The chosen horse is 100% guaranteed to take 1st place!
-   - **Dynamic Shuffling for 2nd–6th**: All other horses actively duel, execute tactical surges, overtake, and swap positions throughout the race (instead of being clumped together).
-   - **Lateral Steering & Overtaking**: When approaching a horse from behind, horses dynamically steer left or right to pass and naturally tuck towards the inside rail on the curves!
-
----
-
 ## 🚀 Running the Simulation
 
 Double-click **[`start.bat`](./start.bat)** (or run `python -m http.server 8000`) and open `http://localhost:8000` in your browser.
