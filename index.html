@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>3D Horse Racing Simulation</title>
+  <link rel="stylesheet" href="style.css">
+  
+  <!-- Import Map for Three.js & Addons -->
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+    }
+  }
+  </script>
+</head>
+<body>
+
+  <!-- Loading Screen -->
+  <div id="loading-screen">
+    <div class="spinner"></div>
+    <h2 style="font-weight: 700; color: #f59e0b; letter-spacing: 1px;">LOADING 3D HORSE ANIMATION</h2>
+    <p id="loading-status" style="color: #94a3b8; font-size: 0.9rem;">Reading horse_run_cycle_on_place.glb...</p>
+  </div>
+
+  <!-- 3D Canvas -->
+  <div id="canvas-container"></div>
+
+  <!-- UI Overlay -->
+  <div id="ui-overlay">
+    
+    <!-- Top Bar -->
+    <header class="top-nav interactive">
+      <div class="brand-pill">
+        <span style="font-size: 1.3rem;">🐎</span>
+        <h1>3D HORSE RACING</h1>
+        <span class="tag">SIMULATOR</span>
+      </div>
+
+      <!-- Dynamic Cinematic Camera Selector -->
+      <div class="controls-group">
+        <button class="nav-btn active" id="btn-cam-follow" data-mode="follow" title="Follow Lead / Focused Horse (1)">
+          <span>🎥</span> <span>Follow Cam</span>
+        </button>
+        <button class="nav-btn" id="btn-cam-orbit" data-mode="orbit" title="Free 360° Mouse Orbit (2)">
+          <span>🔄</span> <span>Orbit Cam</span>
+        </button>
+        <button class="nav-btn" id="btn-cam-side" data-mode="side" title="Trackside TV Rail Cam (3)">
+          <span>📺</span> <span>Rail Cam</span>
+        </button>
+        <button class="nav-btn" id="btn-cam-finish" data-mode="finish" title="Home Stretch Finish Line Cam (4)">
+          <span>🏁</span> <span>Finish Cam</span>
+        </button>
+        <button class="nav-btn" id="btn-cam-drone" data-mode="drone" title="Top-Down Tactical View (5)">
+          <span>🚁</span> <span>Drone Cam</span>
+        </button>
+      </div>
+
+      <!-- Audio Mute Button -->
+      <button class="icon-btn" id="btn-sound" title="Toggle Audio">🔊</button>
+    </header>
+
+    <!-- Announcer / Status Pill -->
+    <div id="status-banner">
+      <span id="status-icon">🚩</span>
+      <span id="status-text">Ready for race. Click "Start Race" or press Spacebar.</span>
+    </div>
+
+    <!-- Left: Horse Roster with Distinct Colors & Camera Focus -->
+    <aside id="horse-roster-dock" class="interactive">
+      <div class="roster-header">
+        <span>Competitors</span>
+        <span style="color: var(--accent-cyan); font-size: 0.7rem;">Click to Focus</span>
+      </div>
+      <div id="roster-items" style="display: flex; flex-direction: column; gap: 8px;">
+        <!-- Populated dynamically via JS -->
+      </div>
+    </aside>
+
+    <!-- Right: Live Standings HUD -->
+    <aside id="standings-hud" class="interactive">
+      <div class="roster-header">
+        <span>Live Standings</span>
+        <span id="race-state-tag" style="color: var(--turf-green); font-size: 0.7rem;">GATE READY</span>
+      </div>
+      <div id="standings-list" style="display: flex; flex-direction: column; gap: 6px;">
+        <!-- Populated dynamically via JS -->
+      </div>
+
+      <div class="track-progress">
+        <div style="display: flex; justify-content: space-between; font-size: 0.7rem; color: #94a3b8; margin-bottom: 4px;">
+          <span>Race Distance</span>
+          <span id="progress-pct">0%</span>
+        </div>
+        <div class="progress-bar-bg">
+          <div class="progress-bar-fill" id="progress-bar-fill"></div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Bottom: Simulation & Playback Controls -->
+    <footer class="bottom-bar interactive">
+      <div class="playback-controls">
+        <button class="btn-primary-action" id="btn-start-race">
+          <span>▶</span> <span id="start-btn-label">START RACE</span>
+        </button>
+        <button class="btn-secondary" id="btn-pause-race" title="Pause / Resume (P)">
+          <span>⏸</span> Pause
+        </button>
+        <button class="btn-secondary" id="btn-reset-race" title="Reset to Starting Gate (R)">
+          <span>🔄</span> Reset
+        </button>
+
+        <!-- Speed Multipliers -->
+        <div class="speed-selector">
+          <button class="speed-btn" data-speed="0.5">0.5x</button>
+          <button class="speed-btn active" data-speed="1.0">1.0x</button>
+          <button class="speed-btn" data-speed="2.0">2.0x</button>
+        </div>
+      </div>
+    </footer>
+
+  </div>
+
+  <!-- Post-Race Results Banner -->
+  <div id="results-overlay" class="interactive">
+    <div class="results-card">
+      <div class="trophy-icon">🏆</div>
+      <div>
+        <h2 style="font-size: 1.6rem; font-weight: 800;" id="winner-name">Margaret Takes 1st Place!</h2>
+        <p style="color: var(--text-muted); font-size: 0.9rem;" id="winner-time">Race Time: 25.10s</p>
+      </div>
+
+      <div class="podium-list" id="podium-list">
+        <!-- Generated in JS -->
+      </div>
+
+      <button class="btn-primary-action" id="btn-restart-from-results" style="justify-content: center; width: 100%;">
+        <span>🔄</span> RACE AGAIN
+      </button>
+    </div>
+  </div>
+
+  <!-- Main Simulation Engine -->
+  <script type="module" src="main.js"></script>
+
+</body>
+</html>
