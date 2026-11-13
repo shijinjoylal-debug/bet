@@ -1925,6 +1925,15 @@ class HorseRacingSimulation {
     document.getElementById('btn-reset-race').addEventListener('click', () => this.resetRace());
     document.getElementById('btn-restart-from-results').addEventListener('click', () => this.resetRace());
 
+    const standingsHud = document.getElementById('standings-hud');
+    const standingsToggle = document.getElementById('btn-toggle-standings');
+    standingsToggle.addEventListener('click', () => {
+      const expanded = standingsToggle.getAttribute('aria-expanded') === 'true';
+      standingsToggle.setAttribute('aria-expanded', String(!expanded));
+      standingsToggle.textContent = expanded ? 'Show' : 'Hide';
+      standingsHud.classList.toggle('is-collapsed', expanded);
+    });
+
     document.querySelectorAll('.speed-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         document.querySelectorAll('.speed-btn').forEach(b => b.classList.remove('active'));

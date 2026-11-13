@@ -398,6 +398,32 @@ body {
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6);
 }
 
+.standings-toggle {
+  display: none;
+  margin-left: auto;
+  padding: 4px 8px;
+  border: 1px solid var(--border-glass);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-main);
+  font: inherit;
+  font-size: 0.65rem;
+  letter-spacing: normal;
+  text-transform: none;
+  cursor: pointer;
+}
+
+#standings-hud.is-collapsed #standings-list,
+#standings-hud.is-collapsed .track-progress {
+  display: none;
+}
+
+#standings-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
 .standings-item {
   display: flex;
   align-items: center;
@@ -790,6 +816,16 @@ body {
     overflow: hidden;
   }
 
+  .standings-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  #standings-hud .roster-header span:last-of-type {
+    display: none;
+  }
+
   #standings-list {
     min-height: 0;
     overflow-y: auto;
@@ -921,6 +957,22 @@ body {
     width: min(210px, 26vw);
     max-height: none;
     overflow-y: auto;
+  }
+
+  .standings-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  #standings-hud .roster-header span:last-of-type {
+    display: none;
+  }
+
+  #standings-hud.is-collapsed {
+    bottom: auto;
+    max-height: none;
+    overflow: hidden;
   }
 
   #standings-list {
