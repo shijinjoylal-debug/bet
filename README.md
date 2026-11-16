@@ -32,4 +32,23 @@ An interactive 3D horse racing simulator built with **Three.js**, featuring anim
 
 ## 🚀 Running the Simulation
 
-Double-click **[`start.bat`](./start.bat)** (or run `python -m http.server 8000`) and open `http://localhost:8000` in your browser.
+The app requires Node.js 18 or newer. It cannot be run with a static file server because sign-in and race controls are enforced by the server.
+
+Set different passwords of at least 12 characters in the root `.env` file:
+
+```dotenv
+ADMIN_PASSWORD=your-private-admin-password
+USER_PASSWORD=your-private-user-password
+```
+
+Keep `.env` private; it is excluded from Git. `.env.example` is the template. Environment variables already set by the hosting platform take precedence over `.env`.
+
+Run `node server.js` or double-click `start.bat`, then open `http://localhost:8000`. Users on the same network can open the server machine's address on port 8000. Set `PORT` to change the port.
+
+For a hosted deployment, configure `ADMIN_PASSWORD` and `USER_PASSWORD` as deployment secrets, set `NODE_ENV=production`, and put the server behind HTTPS. Run one server instance: sign-in sessions and the live race state are held in memory.
+
+## 🔐 Access roles
+
+The server validates sign-ins and issues an HTTP-only session cookie. Administrators can start, pause, reset, and change race speed; viewers can watch the administrator's live simulation but cannot control it. Race state is streamed to signed-in users, and new viewers receive the latest race snapshot.
+
+The frontend and 3D assets must be sent to a browser to render, so browser developer tools can inspect them. That does not grant access to server-protected pages, sessions, or administrator actions: the server checks the session and role for each protected request. Do not expose this service over plain HTTP on an untrusted network.

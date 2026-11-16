@@ -902,9 +902,16 @@ class HorseRacingSimulation {
   constructor() {
     this.container = document.getElementById('canvas-container');
     this.sound = new SoundEngine();
+    this.isAdmin = document.documentElement.dataset.role === 'admin';
 
     this.state = 'READY'; // 'READY', 'COUNTDOWN', 'RACING', 'PAUSED', 'FINISHED'
     this.raceStartTime = 0;
+    this.pausedAt = 0;
+    this.countdownTimer = null;
+    this.eventSource = null;
+    this.lastStandingsUpdateAt = 0;
+    this.serverOffsetMs = 0;
+    this.snapshotPending = false;
     this.timeScale = 1.0;
     this.cameraMode = 'follow';
     this.focusedHorseId = 1;
@@ -964,6 +971,7 @@ class HorseRacingSimulation {
           }
         }
         this.createThoroughbredRoster();
+        this.connectLiveRace();
         this.animate();
       })
       .catch(error => {
@@ -1597,61 +1605,31 @@ class HorseRacingSimulation {
      RACE SIMULATION & STATE MACHINE
      -------------------------------------------------------------------------- */
   startRace() {
-    // Refresh predetermined winner from source code configuration
-    this.forcedWinnerId = getPredeterminedWinnerId(PREDETERMINED_WINNER);
-
-    if (this.state === 'RACING') return;
-    if (this.state === 'PAUSED') {
-      this.state = 'RACING';
-      this.sound.startGallop();
-      document.getElementById('status-text').textContent = "RACE RESUMED!";
-      return;
-    }
-
-    this.state = 'COUNTDOWN';
-    this.sound.playTrumpetFanfare();
-
-    const banner = document.getElementById('status-banner');
-    const text = document.getElementById('status-text');
-    banner.style.display = 'flex';
-    text.textContent = "GATES OPEN IN 3... 2... 1...";
-
-    setTimeout(() => {
-      this.state = 'RACING';
-      this.raceStartTime = performance.now();
-      this.sound.startGallop();
-      text.textContent = "AND THEY'RE OFF!";
-      document.getElementById('race-state-tag').textContent = "IN PROGRESS";
-
-      this.setGateDoorsOpen(true);
-
-      this.horses.forEach(h => {
-        h.state = 'GATE_BREAK';
-        h.distance = 4;
-        h.speed = 12 + (h.data.acceleration * 1.6);
-        h.finished = false;
-        h.currentStamina = h.data.stamina;
-      });
-    }, 1800);
+    if (!this.isAdmin) return;
+    if (this.state === 'RACING' || this.state === 'COUNTDOWN') return;
+    this.requestControl(this.state === 'PAUSED' ? 'resume' : 'start');
   }
 
   pauseRace() {
-    if (this.state === 'RACING') {
-      this.state = 'PAUSED';
-      this.sound.stopGallop();
-      document.getElementById('status-text').textContent = "RACE PAUSED (Click Start or Space to Resume)";
-      document.getElementById('race-state-tag').textContent = "PAUSED";
-    } else if (this.state === 'PAUSED') {
-      this.startRace();
-    }
+    if (!this.isAdmin) return;
+    if (this.state !== 'RACING' && this.state !== 'PAUSED') return;
+    this.requestControl(this.state === 'PAUSED' ? 'resume' : 'pause');
   }
 
   resetRace() {
+    if (!this.isAdmin) return;
+    this.requestControl('reset');
+  }
+
+  resetRaceLocal() {
+    clearTimeout(this.countdownTimer);
     this.state = 'READY';
     this.forcedWinnerId = getPredeterminedWinnerId(PREDETERMINED_WINNER);
     this.sound.stopGallop();
     document.getElementById('results-overlay').classList.remove('active');
-    document.getElementById('status-text').textContent = "Ready for race. Click 'Start Race' or press Spacebar.";
+    document.getElementById('status-text').textContent = this.isAdmin
+      ? "Ready for race. Click 'Start Race' or press Spacebar."
+      : "Waiting for the administrator to start the race.";
     document.getElementById('race-state-tag').textContent = "GATE READY";
 
     this.setGateDoorsOpen(false);
@@ -1681,6 +1659,232 @@ class HorseRacingSimulation {
 
     this.horses.sort((a, b) => a.data.id - b.data.id);
     this.updateLeaderboardUI();
+  }
+
+  connectLiveRace() {
+    this.eventSource = new EventSource('/api/events');
+    this.eventSource.addEventListener('sync', event => {
+      try {
+        this.handleServerState(JSON.parse(event.data), true);
+      } catch (error) {
+        console.error('Unable to apply the shared race state.', error);
+      }
+    });
+    this.eventSource.addEventListener('state', event => {
+      try {
+        this.handleServerState(JSON.parse(event.data));
+      } catch (error) {
+        console.error('Unable to apply the shared race state.', error);
+      }
+    });
+    this.eventSource.addEventListener('snapshot', event => {
+      if (!this.isAdmin) {
+        try {
+          this.applyRaceSnapshot(JSON.parse(event.data));
+        } catch (error) {
+          console.error('Unable to apply the live race update.', error);
+        }
+      }
+    });
+    this.eventSource.onerror = () => {
+      if (this.eventSource.readyState === EventSource.CLOSED) {
+        console.error('The live race connection closed.');
+        document.getElementById('status-text').textContent = 'Live race connection lost. Refresh after signing in again.';
+      }
+    };
+
+    if (this.isAdmin) {
+      this.snapshotTimer = setInterval(() => {
+        if (this.state === 'RACING') this.publishRaceSnapshot();
+      }, 200);
+    }
+  }
+
+  async requestControl(action, fields = {}) {
+    try {
+      const response = await fetch('/api/control', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, ...fields }),
+      });
+      if (!response.ok) {
+        const result = await response.json();
+        throw new Error(result.error || `Server rejected ${action}.`);
+      }
+    } catch (error) {
+      console.error(`Unable to ${action} the shared race.`, error);
+      document.getElementById('status-text').textContent = `Unable to ${action} the race: ${error.message}`;
+    }
+  }
+
+  async publishRaceSnapshot() {
+    if (this.snapshotPending) return;
+    this.snapshotPending = true;
+    const snapshot = {
+      horses: this.horses.map(horse => ({
+        id: horse.data.id,
+        distance: horse.distance,
+        speed: horse.speed,
+        state: horse.state,
+        finished: horse.finished,
+        finishTime: horse.finishTime,
+        currentStamina: horse.currentStamina,
+        laneOffset: horse.laneOffset,
+        targetLaneOffset: horse.targetLaneOffset,
+        stridePhase: horse.stridePhase,
+        idleTimer: horse.idleTimer,
+      })),
+    };
+    try {
+      const response = await fetch('/api/snapshot', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(snapshot),
+      });
+      if (!response.ok && response.status !== 409) {
+        const result = await response.json();
+        throw new Error(result.error || 'The server rejected the race update.');
+      }
+    } catch (error) {
+      console.error('Unable to publish the live race update.', error);
+      document.getElementById('status-text').textContent = `Live update failed: ${error.message}`;
+    } finally {
+      this.snapshotPending = false;
+    }
+  }
+
+  handleServerState(sharedState, isSync = false) {
+    if (Number.isFinite(sharedState.serverTime)) {
+      this.serverOffsetMs = sharedState.serverTime - Date.now();
+    }
+    if (Number.isFinite(sharedState.timeScale)) {
+      this.timeScale = sharedState.timeScale;
+      document.querySelectorAll('.speed-btn').forEach(button => {
+        button.classList.toggle('active', Number(button.dataset.speed) === this.timeScale);
+      });
+    }
+
+    if (sharedState.action === 'start') {
+      this.beginRaceCountdown(sharedState.raceStartAt);
+    } else if (sharedState.action === 'pause') {
+      this.state = 'PAUSED';
+      this.pausedAt = performance.now();
+      this.sound.stopGallop();
+      document.getElementById('status-text').textContent = 'RACE PAUSED';
+      document.getElementById('race-state-tag').textContent = 'PAUSED';
+    } else if (sharedState.action === 'resume') {
+      this.resumeRaceLocal();
+    } else if (sharedState.action === 'reset') {
+      this.resetRaceLocal();
+    } else if (sharedState.action === 'finish') {
+      this.finishRace(false);
+    } else if (isSync) {
+      if (sharedState.phase === 'READY') {
+        this.resetRaceLocal();
+      } else if (sharedState.phase === 'COUNTDOWN') {
+        this.beginRaceCountdown(sharedState.raceStartAt);
+      } else {
+        this.enterRace(sharedState.raceStartAt);
+        if (sharedState.snapshot) this.applyRaceSnapshot(sharedState.snapshot);
+        if (sharedState.phase === 'PAUSED') {
+          this.state = 'PAUSED';
+          this.pausedAt = performance.now();
+          this.sound.stopGallop();
+          document.getElementById('status-text').textContent = 'RACE PAUSED';
+          document.getElementById('race-state-tag').textContent = 'PAUSED';
+        } else if (sharedState.phase === 'FINISHED') {
+          this.state = 'RACING';
+          this.finishRace(false);
+        } else {
+          this.state = 'RACING';
+          this.sound.startGallop();
+        }
+      }
+    }
+  }
+
+  beginRaceCountdown(raceStartAt) {
+    clearTimeout(this.countdownTimer);
+    this.forcedWinnerId = getPredeterminedWinnerId(PREDETERMINED_WINNER);
+    this.state = 'COUNTDOWN';
+    this.sound.playTrumpetFanfare();
+    document.getElementById('status-banner').style.display = 'flex';
+    document.getElementById('status-text').textContent = 'GATES OPEN IN 3... 2... 1...';
+    this.countdownTimer = setTimeout(() => {
+      if (this.state === 'COUNTDOWN') this.enterRace(raceStartAt);
+    }, Math.max(0, raceStartAt - this.serverNow()));
+  }
+
+  enterRace(raceStartAt) {
+    this.state = 'RACING';
+    this.raceStartTime = performance.now() - Math.max(0, this.serverNow() - raceStartAt);
+    this.pausedAt = 0;
+    this.sound.startGallop();
+    document.getElementById('status-text').textContent = "AND THEY'RE OFF!";
+    document.getElementById('race-state-tag').textContent = 'IN PROGRESS';
+    this.setGateDoorsOpen(true);
+    this.horses.forEach(horse => {
+      horse.state = 'GATE_BREAK';
+      horse.distance = 4;
+      horse.speed = 12 + (horse.data.acceleration * 1.6);
+      horse.finished = false;
+      horse.currentStamina = horse.data.stamina;
+    });
+  }
+
+  resumeRaceLocal() {
+    if (this.state === 'PAUSED') {
+      this.raceStartTime += performance.now() - this.pausedAt;
+    }
+    this.pausedAt = 0;
+    this.state = 'RACING';
+    this.sound.startGallop();
+    document.getElementById('status-text').textContent = 'RACE RESUMED!';
+    document.getElementById('race-state-tag').textContent = 'IN PROGRESS';
+  }
+
+  applyRaceSnapshot(snapshot) {
+    if (!Array.isArray(snapshot.horses)) return;
+    if (Number.isFinite(snapshot.serverTime)) {
+      this.serverOffsetMs = snapshot.serverTime - Date.now();
+    }
+    const horsesById = new Map(snapshot.horses.map(horse => [horse.id, horse]));
+    this.horses.forEach(horse => {
+      const update = horsesById.get(horse.data.id);
+      if (!update) return;
+      for (const key of ['distance', 'speed', 'finishTime', 'currentStamina', 'laneOffset', 'targetLaneOffset', 'stridePhase', 'idleTimer']) {
+        if (Number.isFinite(update[key])) horse[key] = update[key];
+      }
+      if (typeof update.state === 'string') horse.state = update.state;
+      if (typeof update.finished === 'boolean') horse.finished = update.finished;
+      this.updateHorseTransform(horse);
+    });
+    this.horses.sort((a, b) => b.distance - a.distance);
+    this.horses.forEach((horse, index) => { horse.rank = index + 1; });
+    this.updateLeaderboardUI();
+  }
+
+  serverNow() {
+    return Date.now() + this.serverOffsetMs;
+  }
+
+  updateViewerRace(delta) {
+    if (this.state !== 'RACING') {
+      this.horses.forEach(horse => this.updateHorseTransform(horse));
+      return;
+    }
+    this.horses.forEach(horse => {
+      horse.distance += horse.speed * delta;
+      horse.stridePhase += (horse.state === 'FINAL_SPRINT' ? horse.speed * 0.35 : horse.speed * 0.28) * delta;
+      horse.laneOffset += (horse.targetLaneOffset - horse.laneOffset) * delta * 2.2;
+      this.updateHorseTransform(horse);
+    });
+    this.horses.sort((a, b) => b.distance - a.distance);
+    this.horses.forEach((horse, index) => { horse.rank = index + 1; });
+    if (Date.now() - this.lastStandingsUpdateAt >= 200) {
+      this.lastStandingsUpdateAt = Date.now();
+      this.updateLeaderboardUI();
+    }
   }
 
   updateRace(delta) {
@@ -1852,10 +2056,12 @@ class HorseRacingSimulation {
     }
   }
 
-  finishRace() {
+  finishRace(notifyServer = true) {
+    if (this.state === 'FINISHED') return;
     this.state = 'FINISHED';
     this.sound.stopGallop();
     this.sound.playFinishChime();
+    if (notifyServer && this.isAdmin) this.requestControl('finish');
 
     const winner = this.horses[0];
     document.getElementById('status-text').textContent = `★ ${winner.data.name} TAKES 1st PLACE! ★`;
@@ -1891,6 +2097,10 @@ class HorseRacingSimulation {
      UI CONTROLLER & EVENT LISTENERS
      -------------------------------------------------------------------------- */
   initUI() {
+    document.getElementById('status-text').textContent = this.isAdmin
+      ? "Ready for race. Click 'Start Race' or press Spacebar."
+      : "Waiting for the administrator to start the race.";
+
     const rosterContainer = document.getElementById('roster-items');
     rosterContainer.innerHTML = '';
 
@@ -1924,6 +2134,19 @@ class HorseRacingSimulation {
     document.getElementById('btn-pause-race').addEventListener('click', () => this.pauseRace());
     document.getElementById('btn-reset-race').addEventListener('click', () => this.resetRace());
     document.getElementById('btn-restart-from-results').addEventListener('click', () => this.resetRace());
+    document.getElementById('btn-close-results').addEventListener('click', () => {
+      document.getElementById('results-overlay').classList.remove('active');
+    });
+    document.getElementById('btn-logout').addEventListener('click', async () => {
+      try {
+        const response = await fetch('/api/logout', { method: 'POST' });
+        if (!response.ok) throw new Error(`Sign-out failed (${response.status}).`);
+        window.location.replace('/login.html');
+      } catch (error) {
+        console.error('Unable to sign out.', error);
+        document.getElementById('status-text').textContent = `Unable to sign out: ${error.message}`;
+      }
+    });
 
     const standingsHud = document.getElementById('standings-hud');
     const standingsToggle = document.getElementById('btn-toggle-standings');
@@ -1936,9 +2159,7 @@ class HorseRacingSimulation {
 
     document.querySelectorAll('.speed-btn').forEach(btn => {
       btn.addEventListener('click', () => {
-        document.querySelectorAll('.speed-btn').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        this.timeScale = parseFloat(btn.dataset.speed);
+        if (this.isAdmin) this.requestControl('speed', { speed: Number(btn.dataset.speed) });
       });
     });
 
@@ -1949,13 +2170,13 @@ class HorseRacingSimulation {
     });
 
     window.addEventListener('keydown', (e) => {
-      if (e.key === ' ') {
+      if (e.key === ' ' && this.isAdmin) {
         e.preventDefault();
         if (this.state === 'READY') this.startRace();
         else if (this.state === 'RACING') this.pauseRace();
         else if (this.state === 'PAUSED') this.startRace();
       }
-      if (e.key === 'r' || e.key === 'R') this.resetRace();
+      if (this.isAdmin && (e.key === 'r' || e.key === 'R')) this.resetRace();
       if (e.key === '1') this.setCameraMode('follow');
       if (e.key === '2') this.setCameraMode('orbit');
       if (e.key === '3') this.setCameraMode('side');
@@ -2029,7 +2250,8 @@ class HorseRacingSimulation {
       this.dust.update(delta);
     }
 
-    this.updateRace(delta);
+    if (this.isAdmin || this.state !== 'RACING') this.updateRace(delta);
+    else this.updateViewerRace(delta);
     this.horses.forEach(horse => {
       horse.runningAction.paused = this.state !== 'RACING' || horse.state === 'COOLING_DOWN';
       horse.mixer.update(delta);
@@ -2040,6 +2262,12 @@ class HorseRacingSimulation {
 }
 
 // Launch simulation
-window.addEventListener('DOMContentLoaded', () => {
+const launchSimulation = () => {
   new HorseRacingSimulation();
-});
+};
+
+if (document.readyState === 'loading') {
+  window.addEventListener('DOMContentLoaded', launchSimulation, { once: true });
+} else {
+  launchSimulation();
+}

@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sign In | 3D Horse Racing</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="auth.js" defer></script>
+</head>
+<body class="login-page">
+  <main class="login-card">
+    <div class="login-brand">🐎 3D HORSE RACING</div>
+    <h1>Sign in</h1>
+    <p>Enter your access password to continue.</p>
+    <form id="login-form">
+      <label for="access-password">Password</label>
+      <input id="access-password" name="password" type="password" autocomplete="current-password" required autofocus>
+      <p id="login-error" class="login-error" role="alert" aria-live="polite"></p>
+      <button class="btn-primary-action" type="submit">Continue</button>
+    </form>
+  </main>
+</body>
+</html>

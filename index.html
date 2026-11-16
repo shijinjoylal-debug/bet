@@ -5,6 +5,21 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>3D Horse Racing Simulation</title>
   <link rel="stylesheet" href="style.css">
+  <script type="module">
+    try {
+      const response = await fetch('/api/session');
+      if (!response.ok) {
+        window.location.replace('/login.html');
+      } else {
+        const session = await response.json();
+        document.documentElement.dataset.role = session.role;
+        await import('./main.js');
+      }
+    } catch (error) {
+      console.error('Unable to verify the sign-in session.', error);
+      document.getElementById('loading-status').textContent = 'Unable to contact the sign-in server.';
+    }
+  </script>
   
   <!-- Import Map for Three.js & Addons -->
   <script type="importmap">
@@ -60,12 +75,13 @@
 
       <!-- Audio Mute Button -->
       <button class="icon-btn" id="btn-sound" title="Toggle Audio">🔊</button>
+      <button class="icon-btn logout-btn" id="btn-logout" title="Sign out" aria-label="Sign out">↪</button>
     </header>
 
     <!-- Announcer / Status Pill -->
     <div id="status-banner">
       <span id="status-icon">🚩</span>
-      <span id="status-text">Ready for race. Click "Start Race" or press Spacebar.</span>
+      <span id="status-text">Waiting for race start.</span>
     </div>
 
     <!-- Left: Horse Roster with Distinct Colors & Camera Focus -->
@@ -102,7 +118,7 @@
     </aside>
 
     <!-- Bottom: Simulation & Playback Controls -->
-    <footer class="bottom-bar interactive">
+    <footer class="bottom-bar interactive" data-admin-only>
       <div class="playback-controls">
         <button class="btn-primary-action" id="btn-start-race">
           <span>▶</span> <span id="start-btn-label">START RACE</span>
@@ -138,14 +154,13 @@
         <!-- Generated in JS -->
       </div>
 
-      <button class="btn-primary-action" id="btn-restart-from-results" style="justify-content: center; width: 100%;">
+      <button class="btn-secondary" id="btn-close-results">VIEW SIMULATION</button>
+      <button class="btn-primary-action" id="btn-restart-from-results" data-admin-only style="justify-content: center; width: 100%;">
         <span>🔄</span> RACE AGAIN
       </button>
     </div>
   </div>
 
   <!-- Main Simulation Engine -->
-  <script type="module" src="main.js"></script>
-
 </body>
 </html>
