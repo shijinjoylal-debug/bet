@@ -9,8 +9,9 @@ if (loginForm) {
     submitButton.disabled = true;
 
     try {
-      const response = await fetch('/api/login', {
+      const response = await fetch(window.raceApiUrl('/api/login'), {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ password: document.getElementById('access-password').value }),
       });

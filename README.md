@@ -47,6 +47,12 @@ Run `node server.js` or double-click `start.bat`, then open `http://localhost:80
 
 For a hosted deployment, configure `ADMIN_PASSWORD` and `USER_PASSWORD` as deployment secrets, set `NODE_ENV=production`, and put the server behind HTTPS. Run one server instance: sign-in sessions and the live race state are held in memory.
 
+### Separate Vercel frontend and Railway API
+
+The frontend's `race-api-base-url` metadata in `login.html` and `index.html` must point to the Railway service URL. On Railway, set `FRONTEND_ORIGINS` to the exact Vercel origin (no trailing slash), for example `https://shijinjoylal-debug-bet.vercel.app`, and set `NODE_ENV=production`. The app uses credentialed CORS and secure cross-site cookies so sign-in, admin controls, and the live event stream can reach Railway from Vercel.
+
+Some browsers block third-party cookies between `vercel.app` and `railway.app`. If sign-in still does not persist in a browser, use custom frontend/API domains under the same site or proxy `/api` requests through Vercel.
+
 ## 🔐 Access roles
 
 The server validates sign-ins and issues an HTTP-only session cookie. Administrators can start, pause, reset, and change race speed; viewers can watch the administrator's live simulation but cannot control it. Race state is streamed to signed-in users, and new viewers receive the latest race snapshot.

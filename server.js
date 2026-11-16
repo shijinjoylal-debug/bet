@@ -31,7 +31,18 @@ const PORT = Number(process.env.PORT || 8000);
 const HOST = process.env.HOST || '0.0.0.0';
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 const COOKIE_NAME = 'horse-racing-session';
-const PUBLIC_FILES = new Set(['login.html', 'auth.js', 'style.css']);
+const FRONTEND_ORIGINS = new Set((process.env.FRONTEND_ORIGINS || '')
+  .split(',')
+  .map(origin => origin.trim())
+  .filter(Boolean)
+  .map(origin => {
+    const parsedOrigin = new URL(origin);
+    if (parsedOrigin.origin !== origin) {
+      throw new Error('FRONTEND_ORIGINS must contain origins without paths or trailing slashes.');
+    }
+    return parsedOrigin.origin;
+  }));
+const PUBLIC_FILES = new Set(['login.html', 'auth.js', 'api-client.js', 'style.css']);
 const PRIVATE_FILES = new Set(['index.html', 'main.js', 'horse_run_cycle_on_place.glb']);
 const CONTENT_TYPES = {
   '.css': 'text/css; charset=utf-8',
@@ -158,7 +169,9 @@ function requireSameOrigin(request, response) {
     return false;
   }
   try {
-    if (new URL(origin).host !== request.headers.host) {
+    const parsedOrigin = new URL(origin);
+    if (parsedOrigin.origin !== origin ||
+        (parsedOrigin.host !== request.headers.host && !FRONTEND_ORIGINS.has(parsedOrigin.origin))) {
       sendError(response, 403, 'A same-origin request is required.');
       return false;
     }
@@ -167,6 +180,11 @@ function requireSameOrigin(request, response) {
     return false;
   }
   return true;
+}
+
+function sessionCookie(token, maxAge) {
+  const production = process.env.NODE_ENV === 'production';
+  return `${COOKIE_NAME}=${token}; HttpOnly; Path=/; SameSite=${production ? 'None' : 'Strict'}; Max-Age=${maxAge}${production ? '; Secure' : ''}`;
 }
 
 function publicRaceState() {
@@ -297,6 +315,23 @@ const server = http.createServer(async (request, response) => {
     return;
   }
 
+  if (request.headers.origin) {
+    if (!requireSameOrigin(request, response)) return;
+    response.setHeader('Access-Control-Allow-Origin', request.headers.origin);
+    response.setHeader('Access-Control-Allow-Credentials', 'true');
+    response.setHeader('Vary', 'Origin');
+  }
+
+  if (request.method === 'OPTIONS' && pathname.startsWith('/api/')) {
+    response.writeHead(204, {
+      'Access-Control-Allow-Headers': 'Content-Type',
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      'Access-Control-Max-Age': '600',
+    });
+    response.end();
+    return;
+  }
+
   if (request.method === 'GET' && pathname === '/') {
     response.writeHead(302, { Location: '/login.html', 'Cache-Control': 'no-store' });
     response.end();
@@ -332,9 +367,8 @@ const server = http.createServer(async (request, response) => {
     clearLoginFailures(request);
     const token = crypto.randomBytes(32).toString('base64url');
     sessions.set(token, { role, expiresAt: Date.now() + SESSION_TTL_MS });
-    const secure = process.env.NODE_ENV === 'production' ? '; Secure' : '';
     sendJson(response, 200, { role }, {
-      'Set-Cookie': `${COOKIE_NAME}=${token}; HttpOnly; Path=/; SameSite=Strict; Max-Age=${SESSION_TTL_MS / 1000}${secure}`,
+      'Set-Cookie': sessionCookie(token, SESSION_TTL_MS / 1000),
     });
     return;
   }
@@ -350,9 +384,8 @@ const server = http.createServer(async (request, response) => {
         stream.end();
       }
     }
-    const secure = process.env.NODE_ENV === 'production' ? '; Secure' : '';
     sendJson(response, 200, { ok: true }, {
-      'Set-Cookie': `${COOKIE_NAME}=; HttpOnly; Path=/; SameSite=Strict; Max-Age=0${secure}`,
+      'Set-Cookie': sessionCookie('', 0),
     });
     return;
   }

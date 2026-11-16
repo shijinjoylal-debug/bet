@@ -4,10 +4,12 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>3D Horse Racing Simulation</title>
+  <meta name="race-api-base-url" content="https://bet-production-03f13073.up.railway.app">
   <link rel="stylesheet" href="style.css">
+  <script src="api-client.js"></script>
   <script type="module">
     try {
-      const response = await fetch('/api/session');
+      const response = await fetch(window.raceApiUrl('/api/session'), { credentials: 'include' });
       if (!response.ok) {
         window.location.replace('/login.html');
       } else {

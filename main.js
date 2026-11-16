@@ -1662,7 +1662,7 @@ class HorseRacingSimulation {
   }
 
   connectLiveRace() {
-    this.eventSource = new EventSource('/api/events');
+    this.eventSource = new EventSource(window.raceApiUrl('/api/events'), { withCredentials: true });
     this.eventSource.addEventListener('sync', event => {
       try {
         this.handleServerState(JSON.parse(event.data), true);
@@ -1702,8 +1702,9 @@ class HorseRacingSimulation {
 
   async requestControl(action, fields = {}) {
     try {
-      const response = await fetch('/api/control', {
+      const response = await fetch(window.raceApiUrl('/api/control'), {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action, ...fields }),
       });
@@ -1736,8 +1737,9 @@ class HorseRacingSimulation {
       })),
     };
     try {
-      const response = await fetch('/api/snapshot', {
+      const response = await fetch(window.raceApiUrl('/api/snapshot'), {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(snapshot),
       });
@@ -2139,7 +2141,10 @@ class HorseRacingSimulation {
     });
     document.getElementById('btn-logout').addEventListener('click', async () => {
       try {
-        const response = await fetch('/api/logout', { method: 'POST' });
+        const response = await fetch(window.raceApiUrl('/api/logout'), {
+          method: 'POST',
+          credentials: 'include',
+        });
         if (!response.ok) throw new Error(`Sign-out failed (${response.status}).`);
         window.location.replace('/login.html');
       } catch (error) {
