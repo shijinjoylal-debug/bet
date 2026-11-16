@@ -45,7 +45,7 @@ Keep `.env` private; it is excluded from Git. `.env.example` is the template. En
 
 Run `node server.js` or double-click `start.bat`, then open `http://localhost:8000`. Users on the same network can open the server machine's address on port 8000. Set `PORT` to change the port.
 
-For a hosted deployment, configure `ADMIN_PASSWORD` and `USER_PASSWORD` as deployment secrets, set `NODE_ENV=production`, and put the server behind HTTPS. Run one server instance: sign-in sessions and the live race state are held in memory.
+For a hosted deployment, configure `ADMIN_PASSWORD` and `USER_PASSWORD` as deployment secrets, set `NODE_ENV=production`, and put the server behind HTTPS. On Railway, deploy the repository root as a Node service and use `npm start`; Railway supplies the `PORT` value. Run one server instance: sign-in sessions and the live race state are held in memory.
 
 ### Separate Vercel frontend and Railway API
 
