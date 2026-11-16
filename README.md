@@ -49,9 +49,13 @@ For a hosted deployment, configure `ADMIN_PASSWORD` and `USER_PASSWORD` as deplo
 
 ### Separate Vercel frontend and Railway API
 
-The frontend's `race-api-base-url` metadata in `login.html` and `index.html` must point to the Railway service URL. On Railway, set `FRONTEND_ORIGINS` to the exact Vercel origin (no trailing slash), for example `https://shijinjoylal-debug-bet.vercel.app`, and set `NODE_ENV=production`. The app uses credentialed CORS and secure cross-site cookies so sign-in, admin controls, and the live event stream can reach Railway from Vercel.
+Deploy the repository root to Vercel and Railway. `vercel.json` proxies `/api/*` requests to the Railway service, so the browser uses the Vercel origin for both the frontend and API. This avoids third-party-cookie blocking between `vercel.app` and `railway.app`. The API base URL metadata in `login.html` and `index.html` is intentionally blank: local and Railway-hosted pages use their own origin, while Vercel uses its `/api` rewrite.
 
-Some browsers block third-party cookies between `vercel.app` and `railway.app`. If sign-in still does not persist in a browser, use custom frontend/API domains under the same site or proxy `/api` requests through Vercel.
+On Railway, set `FRONTEND_ORIGINS` to the exact Vercel origin (no trailing slash), for example `https://shijinjoylal-debug-bet.vercel.app`, and set `NODE_ENV=production`. Set distinct `ADMIN_PASSWORD` and `USER_PASSWORD` values there as well. Railway must run one server instance because sign-in sessions and live race state are held in memory.
+
+The admin and viewer use the same race page, but the admin sees race controls while the viewer is read-only. This is intentional; Railway enforces the role for protected actions.
+
+Use the site's `https://…vercel.app` address. Vercel provides HTTPS automatically; a browser warning such as “Your connection isn't private” or “Deceptive site ahead” is not fixed by application code and should be checked against the exact deployed URL and warning.
 
 ## 🔐 Access roles
 
